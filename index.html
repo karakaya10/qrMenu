@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gastro Menu & Sipariş</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #12161A;
+            --bg-card: #1C2229;
+            --primary: #FF6B35;
+            --text-main: #F3F4F6;
+            --text-muted: #9CA3AF;
+            --success: #2ECC71;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            padding-bottom: 90px; /* Sepet barı için alt boşluk */
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 20px 15px 20px;
+        }
+
+        header h1 { font-size: 24px; font-weight: 700; }
+        header h1 span { color: var(--primary); }
+        .table-no { color: var(--primary); font-weight: 600; font-size: 14px; margin-top: 5px; }
+
+        /* KATEGORİLER */
+        .category-nav {
+            display: flex; gap: 10px; overflow-x: auto; padding: 15px 20px;
+            position: sticky; top: 0; background-color: var(--bg-dark); z-index: 90;
+        }
+        .category-nav::-webkit-scrollbar { display: none; }
+        .category-btn {
+            background-color: var(--bg-card); color: var(--text-main); border: 1px solid #2A333D;
+            padding: 10px 20px; border-radius: 25px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
+        }
+        .category-btn.active {
+            background-color: var(--primary); color: #fff; border-color: var(--primary);
+        }
+
+        /* ÜRÜNLER */
+        .menu-container { padding: 20px; }
+        .menu-page { display: none; animation: fadeIn 0.4s ease forwards; }
+        .menu-page.active { display: block; }
+        .menu-item {
+            display: flex; background-color: var(--bg-card); border-radius: 16px;
+            overflow: hidden; margin-bottom: 15px; border: 1px solid #232A33;
+        }
+        .item-img { width: 90px; height: 90px; flex-shrink: 0; }
+        .item-details { padding: 12px; display: flex; flex-direction: column; justify-content: space-between; flex-grow: 1; }
+        .item-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .item-title { font-size: 14px; font-weight: 600; }
+        .item-price { color: var(--primary); font-weight: 700; font-size: 15px; }
+        
+        /* EKLE BUTONU */
+        .add-to-cart-btn {
+            background-color: transparent; border: 1px solid var(--primary); color: var(--primary);
+            padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer;
+            align-self: flex-end; transition: all 0.2s;
+        }
+        .add-to-cart-btn:hover { background-color: var(--primary); color: white; }
+
+        /* ALT SEPET BARI */
+        .cart-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; background-color: var(--bg-card);
+            padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+            border-top: 2px solid #232A33; z-index: 100; display: none; /* Boşken gizli */
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+        }
+        .cart-info h4 { font-size: 16px; color: #fff; }
+        .cart-info p { font-size: 12px; color: var(--text-muted); }
+        .view-cart-btn {
+            background-color: var(--primary); color: white; border: none; padding: 12px 24px;
+            border-radius: 25px; font-weight: 600; font-size: 14px; cursor: pointer;
+        }
+
+        /* SEPET DETAY MODAL (AÇILIR PENCERE) */
+        .cart-modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.85);
+            z-index: 200; display: none; justify-content: flex-end; flex-direction: column;
+        }
+        .modal-content {
+            background-color: var(--bg-card); border-top-left-radius: 24px; border-top-right-radius: 24px;
+            padding: 25px 20px; max-height: 80vh; overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-modal { color: var(--text-muted); font-size: 24px; cursor: pointer; }
+        
+        .cart-items-list { margin-bottom: 20px; }
+        .cart-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #232A33;
+        }
+        .qty-controls { display: flex; align-items: center; gap: 10px; }
+        .qty-btn {
+            background-color: #232A33; border: none; color: #fff; width: 28px; height: 28px;
+            border-radius: 50%; font-weight: bold; cursor: pointer;
+        }
+
+        .checkout-btn {
+            background-color: var(--success); color: white; border: none; width: 100%;
+            padding: 15px; border-radius: 12px; font-weight: 600; font-size: 16px; cursor: pointer;
+            margin-top: 15px; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>ROAST<span>&</span>DARK</h1>
+        <div class="table-no">Masa: 14</div>
+    </header>
+
+    <nav class="category-nav">
+        <button class="category-btn active" onclick="switchPage('kahveler', this)">Kahveler</button>
+        <button class="category-btn" onclick="switchPage('tatlilar', this)">Tatlılar</button>
+    </nav>
+
+    <main class="menu-container">
+        <!-- KAHVELER -->
+        <section id="kahveler" class="menu-page active">
+            <div class="menu-item">
+                <div class="item-img" style="background: #3a2312;"></div>
+                <div class="item-details">
+                    <div class="item-header">
+                        <span class="item-title">Latte Macchiato</span>
+                        <span class="item-price">120 TL</span>
+                    </div>
+                    <button class="add-to-cart-btn" onclick="addToCart('Latte Macchiato', 120)">Sepete Ekle</button>
+                </div>
+            </div>
+            <div class="menu-item">
+                <div class="item-img" style="background: #2d1f16;"></div>
+                <div class="item-details">
+                    <div class="item-header">
+                        <span class="item-title">Cortado</span>
+                        <span class="item-price">110 TL</span>
+                    </div>
+                    <button class="add-to-cart-btn" onclick="addToCart('Cortado', 110)">Sepete Ekle</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TATLILAR -->
+        <section id="tatlilar" class="menu-page">
+            <div class="menu-item">
+                <div class="item-img" style="background: #5a3d28;"></div>
+                <div class="item-details">
+                    <div class="item-header">
+                        <span class="item-title">San Sebastian</span>
+                        <span class="item-price">165 TL</span>
+                    </div>
+                    <button class="add-to-cart-btn" onclick="addToCart('San Sebastian', 165)">Sepete Ekle</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ALT SEPET BARI -->
+    <div class="cart-bar" id="cartBar">
+        <div class="cart-info">
+            <h4 id="cartTotal">0 TL</h4>
+            <p><span id="cartCount">0</span> Ürün Eklendi</p>
+        </div>
+        <button class="view-cart-btn" onclick="toggleModal(true)">Sepeti Gör</button>
+    </div>
+
+    <!-- SEPET DETAY MODALI -->
+    <div class="cart-modal" id="cartModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Sipariş Özeti</h3>
+                <span class="close-modal" onclick="toggleModal(false)">&times;</span>
+            </div>
+            <div class="cart-items-list" id="modalItemsList">
+                <!-- Dinamik olarak dolacak -->
+            </div>
+            <div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 15px;">
+                <span>Toplam Tutar:</span>
+                <span id="modalTotal" style="color: var(--primary);">0 TL</span>
+            </div>
+            <button class="checkout-btn" onclick="processPayment()">Ödeme Yap ve Sipariş Ver</button>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT SEPET MANTIĞI -->
+    <script>
+        let cart = [];
+
+        function switchPage(pageId, button) {
+            document.querySelectorAll('.menu-page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            button.classList.add('active');
+        }
+
+        function addToCart(name, price) {
+            const existingItem = cart.find(item => item.name === name);
+            if (existingItem) {
+                existingItem.qty++;
+            } else {
+                cart.push({ name, price, qty: 1 });
+            }
+            updateCartUI();
+        }
+
+        function changeQty(name, delta) {
+            const item = cart.find(item => item.name === name);
+            if (item) {
+                item.qty += delta;
+                if (item.qty <= 0) {
+                    cart = cart.filter(i => i.name !== name);
+                }
+            }
+            updateCartUI();
+            if(cart.length === 0) toggleModal(false);
+        }
+
+        function updateCartUI() {
+            const cartBar = document.getElementById('cartBar');
+            const cartTotal = document.getElementById('cartTotal');
+            const cartCount = document.getElementById('cartCount');
+            const modalItemsList = document.getElementById('modalItemsList');
+            const modalTotal = document.getElementById('modalTotal');
+
+            if (cart.length === 0) {
+                cartBar.style.display = 'none';
+                return;
+            }
+
+            cartBar.style.display = 'flex';
+            
+            let total = 0;
+            let count = 0;
+            modalItemsList.innerHTML = '';
+
+            cart.forEach(item => {
+                total += item.price * item.qty;
+                count += item.qty;
+
+                modalItemsList.innerHTML += `
+                    <div class="cart-item">
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px;">${item.name}</div>
+                            <div style="color: var(--primary); font-size: 13px;">${item.price * item.qty} TL</div>
+                        </div>
+                        <div class="qty-controls">
+                            <button class="qty-btn" onclick="changeQty('${item.name}', -1)">-</button>
+                            <span>${item.qty}</span>
+                            <button class="qty-btn" onclick="changeQty('${item.name}', 1)">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            cartTotal.innerText = total + ' TL';
+            modalTotal.innerText = total + ' TL';
+            cartCount.innerText = count;
+        }
+
+        function toggleModal(show) {
+            document.getElementById('cartModal').style.display = show ? 'flex' : 'none';
+        }
+
+        function processPayment() {
+            alert('Sistem entegrasyonu sağlandığında ödeme sayfasına yönlendirilecektir. Toplam: ' + document.getElementById('modalTotal').innerText);
+        }
+    </script>
+</body>
+</html>
