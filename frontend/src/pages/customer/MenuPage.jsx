@@ -16,7 +16,12 @@ export default function MenuPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`${API}/products`)
+    fetch(`${API}/ping`)
+      .then(r => {
+        if (!r.ok) throw new Error('API yanıt vermiyor (' + r.status + ')');
+        return r.json();
+      })
+      .then(() => fetch(`${API}/products`))
       .then(r => {
         if (!r.ok) throw new Error('Sunucu yanıt vermiyor (' + r.status + ')');
         return r.json();

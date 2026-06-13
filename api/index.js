@@ -9,13 +9,12 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// Request logging (Vercel logs'unda görmek için)
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// ─── Veritabanı (In-Memory) ───────────────────────────────────────────
+// ─── Veritabanı ───────────────────────────────────────────────────────
 let db = null;
 
 async function getDb() {
@@ -54,21 +53,19 @@ function seed() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  const admin = get('SELECT id FROM admins WHERE username = ?', ['admin']);
-  if (!admin) {
+  if (!get('SELECT id FROM admins WHERE username = ?', ['admin'])) {
     const hash = bcrypt.hashSync('admin123', 10);
-    run('INSERT INTO admins (username, password, name) VALUES (?, ?, ?)', ['admin', hash, 'Admin User']);
+    run('INSERT INTO admins (username, password, name) VALUES (?,?,?)', ['admin', hash, 'Admin User']);
   }
 
-  const existing = get('SELECT id FROM categories WHERE id = 1');
-  if (!existing) {
-    run('INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)', [1, 'Kahveler', 1]);
-    run('INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)', [2, 'Tatlılar', 2]);
-    run('INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)', [3, 'İçecekler', 3]);
-    run('INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)', [4, 'Atıştırmalıklar', 4]);
-    run('INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)', [5, 'Kahvaltı', 5]);
+  if (!get('SELECT id FROM categories WHERE id = 1')) {
+    run('INSERT INTO categories (id,name,sort_order) VALUES (?,?,?)', [1,'Kahveler',1]);
+    run('INSERT INTO categories (id,name,sort_order) VALUES (?,?,?)', [2,'Tatlılar',2]);
+    run('INSERT INTO categories (id,name,sort_order) VALUES (?,?,?)', [3,'İçecekler',3]);
+    run('INSERT INTO categories (id,name,sort_order) VALUES (?,?,?)', [4,'Atıştırmalıklar',4]);
+    run('INSERT INTO categories (id,name,sort_order) VALUES (?,?,?)', [5,'Kahvaltı',5]);
 
-    const products = [
+    const prods = [
       [1,1,'Latte Macchiato','Süt köpüğü ile hazırlanan klasik İtalyan kahvesi',120],
       [2,1,'Cortado','Eşit oranda espresso ve süt',110],
       [3,1,'Filter Kahve','Yavaş demleme yöntemi ile hazırlanır',95],
@@ -85,14 +82,14 @@ function seed() {
       [14,5,'Serpme Kahvaltı','Zengin serpme kahvaltı tabağı',250],
       [15,5,'Menemen','Yumurta, domates ve biber ile',120],
     ];
-    for (const [id, cat, name, desc, price] of products) {
-      run('INSERT INTO products (id, category_id, name, description, price) VALUES (?,?,?,?,?)', [id, cat, name, desc, price]);
+    for (const [id,cat,name,desc,price] of prods) {
+      run('INSERT INTO products (id,category_id,name,description,price) VALUES (?,?,?,?,?)', [id,cat,name,desc,price]);
     }
   }
 }
 
 function run(sql, params = []) {
-  if (!db) return;
+  if (!db) throw new Error('DB not initialized');
   const stmt = db.prepare(sql);
   if (params.length) stmt.bind(params);
   stmt.step();
@@ -117,7 +114,7 @@ function all(sql, params = []) {
   return rows;
 }
 
-// ─── Auth Middleware ───────────────────────────────────────────────────
+// ─── Middleware ────────────────────────────────────────────────────────
 const adminAuth = (req, res, next) => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer '))
@@ -128,12 +125,22 @@ const adminAuth = (req, res, next) => {
   } catch { res.status(401).json({ error: 'Geçersiz token' }); }
 };
 
-// ─── Routes ────────────────────────────────────────────────────────────
-
-// Health
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// ─── Health / Ping (DB gerektirmez) ──────────────────────────────────
+app.get('/api/ping', (req, res) => {
+  res.json({ status: 'ok', message: 'API çalışıyor', timestamp: new Date().toISOString() });
 });
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await getDb();
+    const catCount = all('SELECT COUNT(*) as count FROM categories')[0]?.count || 0;
+    res.json({ status: 'ok', db: 'connected', categories: catCount });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// ─── Routes ────────────────────────────────────────────────────────────
 
 // Auth
 app.post('/api/auth/login', (req, res) => {
@@ -142,7 +149,11 @@ app.post('/api/auth/login', (req, res) => {
   const admin = get('SELECT * FROM admins WHERE username = ?', [username]);
   if (!admin || !bcrypt.compareSync(password, admin.password))
     return res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre' });
-  const token = jwt.sign({ id: admin.id, username: admin.username }, process.env.JWT_SECRET || 'qr-menu-default-secret', { expiresIn: '24h' });
+  const token = jwt.sign(
+    { id: admin.id, username: admin.username },
+    process.env.JWT_SECRET || 'qr-menu-default-secret',
+    { expiresIn: '24h' }
+  );
   res.json({ token, admin: { id: admin.id, username: admin.username, name: admin.name } });
 });
 
@@ -168,7 +179,7 @@ app.get('/api/products/:id', (req, res) => {
 app.post('/api/products', adminAuth, (req, res) => {
   const { category_id, name, description, price, image } = req.body;
   if (!category_id || !name || !price) return res.status(400).json({ error: 'Kategori, isim ve fiyat gerekli' });
-  run('INSERT INTO products (category_id, name, description, price, image) VALUES (?,?,?,?,?)',
+  run('INSERT INTO products (category_id,name,description,price,image) VALUES (?,?,?,?,?)',
     [category_id, name, description || '', price, image || '']);
   res.status(201).json(get('SELECT * FROM products ORDER BY id DESC LIMIT 1'));
 });
@@ -193,13 +204,14 @@ app.post('/api/orders', (req, res) => {
   const { items, total, table_no, split_count } = req.body;
   if (!items || !total || items.length === 0) return res.status(400).json({ error: 'Sepet boş olamaz' });
   const id = uuidv4().slice(0, 8).toUpperCase();
-  run('INSERT INTO orders (id, table_no, items, total, split_count) VALUES (?,?,?,?,?)',
-    [id, table_no || 0, JSON.stringify(items), total, split_count || 1]);
-  res.status(201).json({ order_id: id, message: 'Sipariş alındı', split_amount: Math.ceil(total / (split_count || 1)) });
+  run('INSERT INTO orders (id,table_no,items,total,split_count) VALUES (?,?,?,?,?)',
+    [id, table_no||0, JSON.stringify(items), total, split_count||1]);
+  res.status(201).json({ order_id: id, message: 'Sipariş alındı', split_amount: Math.ceil(total / (split_count||1)) });
 });
 
 app.get('/api/orders', adminAuth, (req, res) => {
-  res.json(all('SELECT * FROM orders ORDER BY created_at DESC').map(o => ({ ...o, items: JSON.parse(o.items) })));
+  const orders = all('SELECT * FROM orders ORDER BY created_at DESC');
+  res.json(orders.map(o => ({ ...o, items: JSON.parse(o.items) })));
 });
 
 app.get('/api/orders/:id', (req, res) => {
@@ -220,29 +232,25 @@ app.put('/api/orders/:id/status', adminAuth, (req, res) => {
 app.post('/api/chatbot', async (req, res) => {
   const { message, session_id } = req.body;
   if (!message || !session_id) return res.status(400).json({ error: 'Mesaj ve oturum ID gerekli' });
-
   const products = all(`SELECT p.name,p.description,p.price,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.is_available=1`);
   const menuText = products.map(p => `- ${p.name} (${p.category}): ${p.price} TL - ${p.description}`).join('\n');
   const history = all('SELECT role,content FROM chat_history WHERE session_id=? ORDER BY id', [session_id]);
-
   const messages = [
-    { role: 'system', content: `Sen bir restoran menü asistanısın. MENÜ:\n${menuText}\nKurallar: Sade ve net cevaplar ver, fiyat bilgisi TL kullan.` },
+    { role:'system', content: `Sen bir restoran menü asistanısın. MENÜ:\n${menuText}\nKurallar: Sade ve net cevaplar ver, TL kullan.` },
     ...history.map(h => ({ role: h.role, content: h.content })),
-    { role: 'user', content: message }
+    { role:'user', content: message },
   ];
-
-  run('INSERT INTO chat_history (session_id,role,content) VALUES (?,?,?)', [session_id, 'user', message]);
-
+  run('INSERT INTO chat_history (session_id,role,content) VALUES (?,?,?)', [session_id,'user',message]);
   try {
     const { default: OpenAI } = await import('openai');
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const r = await openai.chat.completions.create({ model: 'gpt-4o-mini', messages, temperature: 0.7, max_tokens: 500 });
+    const r = await openai.chat.completions.create({ model:'gpt-4o-mini', messages, temperature:0.7, max_tokens:500 });
     const reply = r.choices[0].message.content;
-    run('INSERT INTO chat_history (session_id,role,content) VALUES (?,?,?)', [session_id, 'assistant', reply]);
+    run('INSERT INTO chat_history (session_id,role,content) VALUES (?,?,?)', [session_id,'assistant',reply]);
     res.json({ reply });
   } catch {
     const fallback = generateFallback(message, products);
-    run('INSERT INTO chat_history (session_id,role,content) VALUES (?,?,?)', [session_id, 'assistant', fallback]);
+    run('INSERT INTO chat_history (session_id,role,content) VALUES (?,?,?)', [session_id,'assistant',fallback]);
     res.json({ reply: fallback });
   }
 });
@@ -254,7 +262,7 @@ function generateFallback(msg, products) {
     if (d.length) return `Bugün ${d[0].name} harika gider! ${d[0].description}. ${d[0].price} TL. Sepete eklemek ister misin?`;
   }
   if (m.includes('kahve')||m.includes('içecek')||m.includes('soğuk')||m.includes('soguk')) {
-    const d = products.filter(p => p.category === 'Kahveler' || p.category === 'İçecekler');
+    const d = products.filter(p => p.category === 'Kahveler'||p.category==='İçecekler');
     if (d.length) return `En çok tercih edilenlerden ${d[0].name} önerebilirim! (${d[0].price} TL). Denemek ister misin?`;
   }
   if (m.includes('ne önerirsin')||m.includes('oner')||m.includes('kararsız')||m.includes('bilmiyorum')) {
@@ -274,38 +282,49 @@ app.post('/api/payment/initialize', (req, res) => {
   const split = split_count || order.split_count || 1;
   const amount = Math.ceil(order.total / split);
   run('UPDATE orders SET status = ? WHERE id = ?', ['paid', order_id]);
-  res.json({ success: true, message: 'Ödeme başarılı (simülasyon)', payment_id: 'SIM-' + order_id, amount });
+  res.json({ success:true, message:'Ödeme başarılı (simülasyon)', payment_id:'SIM-'+order_id, amount });
 });
 
 app.post('/api/payment/split', (req, res) => {
   const { total, split_count } = req.body;
-  if (!total || total <= 0) return res.status(400).json({ error: 'Geçersiz tutar' });
-  if (!split_count || split_count < 1 || split_count > 4) return res.status(400).json({ error: '1-4 kişi arası bölünebilir' });
+  if (!total || total <= 0) return res.status(400).json({ error:'Geçersiz tutar' });
+  if (!split_count || split_count < 1 || split_count > 4) return res.status(400).json({ error:'1-4 kişi arası bölünebilir' });
   const perPerson = Math.ceil(total / split_count);
   const splits = Array.from({ length: split_count }, (_, i) => ({
-    person: i + 1, amount: i === split_count - 1 ? total - perPerson * (split_count - 1) : perPerson
+    person: i+1, amount: i === split_count-1 ? total - perPerson * (split_count - 1) : perPerson
   }));
   res.json({ total, split_count, per_person: perPerson, splits });
 });
 
-// Global error handler
+// ─── Error Handler ────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error('HATA:', err);
   res.status(500).json({ error: 'Sunucu hatası', detail: err.message });
 });
 
-// ─── Export for Vercel ────────────────────────────────────────────────
+// 404 fallback
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'API endpoint bulunamadı', path: req.originalUrl });
+});
+
+// ─── Export ────────────────────────────────────────────────────────────
 let initialized = false;
+let initError = null;
 
 export default async function handler(req, res) {
+  if (initError) {
+    res.status(500).json({ error: 'Sunucu başlatılamadı', detail: initError.message });
+    return;
+  }
   if (!initialized) {
     try {
-      console.log('Veritabanı başlatılıyor...');
+      console.log('DB başlatılıyor...');
       await getDb();
       initialized = true;
-      console.log('Veritabanı hazır');
+      console.log('DB hazır');
     } catch (err) {
-      console.error('Veritabanı başlatma hatası:', err);
+      initError = err;
+      console.error('DB başlatma hatası:', err);
       res.status(500).json({ error: 'Veritabanı başlatılamadı', detail: err.message });
       return;
     }
