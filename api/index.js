@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import initSqlJs from 'sql.js';
@@ -7,8 +6,14 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+// Request logging (Vercel logs'unda görmek için)
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
 // ─── Veritabanı (In-Memory) ───────────────────────────────────────────
 let db = null;
@@ -283,13 +288,27 @@ app.post('/api/payment/split', (req, res) => {
   res.json({ total, split_count, per_person: perPerson, splits });
 });
 
+// Global error handler
+app.use((err, _req, res, _next) => {
+  console.error('HATA:', err);
+  res.status(500).json({ error: 'Sunucu hatası', detail: err.message });
+});
+
 // ─── Export for Vercel ────────────────────────────────────────────────
 let initialized = false;
 
 export default async function handler(req, res) {
   if (!initialized) {
-    await getDb();
-    initialized = true;
+    try {
+      console.log('Veritabanı başlatılıyor...');
+      await getDb();
+      initialized = true;
+      console.log('Veritabanı hazır');
+    } catch (err) {
+      console.error('Veritabanı başlatma hatası:', err);
+      res.status(500).json({ error: 'Veritabanı başlatılamadı', detail: err.message });
+      return;
+    }
   }
   return app(req, res);
 }

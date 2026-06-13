@@ -12,15 +12,20 @@ export default function MenuPage() {
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`${API}/products`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('Sunucu yanıt vermiyor (' + r.status + ')');
+        return r.json();
+      })
       .then(data => {
         setCategories(data);
         if (data.length > 0) setActiveCategory(data[0].id);
-      });
+      })
+      .catch(err => setError(err.message));
   }, []);
 
   const addToCart = (product) => {
@@ -89,6 +94,16 @@ export default function MenuPage() {
         </div>
         <div className="table-badge">Masa 14</div>
       </header>
+
+      {error && (
+        <div className="error-banner">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span>{error}</span>
+          <button onClick={() => { setError(null); window.location.reload(); }}>Tekrar Dene</button>
+        </div>
+      )}
 
       <nav className="category-nav">
         {categories.map(cat => (

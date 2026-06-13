@@ -218,3 +218,29 @@
   font-size: 14px;
   cursor: pointer;
 }
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 12px;
+  padding: 10px 14px;
+  background: #3d1a1a;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: #fca5a5;
+}
+
+.error-banner button {
+  margin-left: auto;
+  background: var(--danger);
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
